@@ -7,7 +7,7 @@ import numpy as np
 from scipy.signal import butter
 
 from src.funcoes import (
-    aplicar_filtro_iir,
+    filtro_iir,
     calcular_ober,
     calcular_spr,
     carregar_amostra_radioml,
@@ -33,12 +33,16 @@ def main():
 
     b, a = butter(ORDEM, FC, btype="low", fs=FS)
 
+    #Seleciona uma amostra específica do dataset.
     amostra = carregar_amostra_radioml(CAMINHO_DATASET, modulacao="QPSK", snr=18)
-    # I é a componente em fase; Q é a componente em quadratura.
-    i = amostra[0]
-    q = amostra[1]
+    
+    i = amostra[0] # I é a componente em fase;
+    q = amostra[1] # Q é a componente em quadratura.
+
+    # Combina as componentes I e Q em um sinal complexo.
     x = i + 1j * q
 
+    # Gera um eixo de amostras para visualização no tempo.
     amostras = np.arange(len(x))
     plt.figure(figsize=(9, 4.5))
     plt.plot(amostras, i, label="I (em fase)")
@@ -52,9 +56,12 @@ def main():
     plt.savefig(resultados / "iq_tempo.png", dpi=150)
     plt.close()
 
+    # ====== Criando a pertubação no sinal ======
+
     # A semente fixa permite repetir exatamente a mesma perturbação.
-    # 0,05 é uma suposição simples desta reprodução, não um valor do artigo.
     np.random.seed(0)
+    # 0,05 é uma suposição simples desta reprodução, não um valor do artigo.
+    # Este valor serve para controlar a amplitude do ruido.
     delta = 0.05 * (
         np.random.normal(0, 1, len(x))
         + 1j * np.random.normal(0, 1, len(x))
@@ -62,9 +69,11 @@ def main():
 
     # O filtro atua na perturbação, não no sinal I/Q original.
     delta_filtrada = (
-        aplicar_filtro_iir(delta.real, b, a)
-        + 1j * aplicar_filtro_iir(delta.imag, b, a)
+        filtro_iir(delta.real, b, a)
+        + 1j * filtro_iir(delta.imag, b, a)
     )
+
+    # Sinal adversário (com a perturbação adicionada), essa função vem do artigo FCIAA.
     x_adv = x + delta
     x_adv_filtrado = x + delta_filtrada
 
@@ -91,10 +100,14 @@ def main():
     plt.savefig(resultados / "perturbacao_espectro_antes_depois.png", dpi=150)
     plt.close()
 
-    # SPR compara energia do sinal com a energia adicionada pela perturbação.
+   # ====== Calculando métricas de desempenho ======
+
+    # Signal-to-Perturbation Ratio (SPR).
+    # Compara energia do sinal com a energia adicionada pela perturbação.
     spr_sem_filtro = calcular_spr(x, x_adv)
     spr_com_filtro = calcular_spr(x, x_adv_filtrado)
 
+    # Out-of-Band Energy Ratio (OBER).
     # OBER é a parcela da energia da perturbação que ficou fora de +/- 15,6 kHz.
     ober_sem_filtro = calcular_ober(delta, FS, FC)
     ober_com_filtro = calcular_ober(delta_filtrada, FS, FC)

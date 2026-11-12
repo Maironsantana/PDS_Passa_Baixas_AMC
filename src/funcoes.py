@@ -1,4 +1,4 @@
-"""Funções pequenas usadas pelos dois experimentos didáticos."""
+"""Funções usadas pelos dois experimentos didáticos."""
 
 from pathlib import Path
 import pickle
@@ -6,50 +6,42 @@ import pickle
 import numpy as np
 
 
-def aplicar_filtro_iir(x, b, a):
-    """Aplica manualmente a equação de diferenças de um filtro IIR.
-
-    Esta é a forma direta da equação. Ela é didática, mas filtros IIR de
-    ordem alta podem ser menos estáveis numericamente nessa representação.
-    """
+def filtro_iir(x, b, a):
+    """IIR: Infinite Impulse Response, ou Resposta ao Impulso Infinita."""
+    """Aplica manualmente a equação de diferenças de um filtro IIR."""
+    
+    # Converte entradas e coeficientes para arrays de ponto flutuante.
     x = np.asarray(x, dtype=float)
     b = np.asarray(b, dtype=float)
     a = np.asarray(a, dtype=float)
 
-    if a[0] == 0:
-        raise ValueError("a[0] não pode ser zero em um filtro IIR.")
-
-    y = np.zeros(len(x), dtype=float)
+    #Vetor de saida do filtro
+    y = np.zeros(len(x), dtype=float) 
 
     for n in range(len(x)):
         # Parte de avanço: entrada atual e entradas passadas.
         for k in range(len(b)):
+            # Somatório das contribuições da entrada atual e passadas.
             if n - k >= 0:
                 y[n] += b[k] * x[n - k]
 
         # Realimentação: saídas passadas também influenciam a saída atual.
-        for k in range(1, len(a)):
-            if n - k >= 0:
-                y[n] -= a[k] * y[n - k]
-
-        y[n] = y[n] / a[0]
-
-    if not np.all(np.isfinite(y)):
-        raise FloatingPointError(
-            "A forma direta do IIR ficou numericamente instável. "
-            "A implementação manual foi mantida para estudo."
-        )
-
+        for l in range(1, len(a)):
+            # Somatório das contribuições da saída passada.
+            if n - l >= 0:
+                y[n] -= a[l] * y[n - l]
     return y
 
 
 def calcular_resposta_frequencia(b, a, fs, quantidade_pontos=2000):
     """Calcula H(e^jw) diretamente, sem usar scipy.signal.freqz."""
+    #Cria um vetor de frequências de 0 até fs/2, com a quantidade de pontos especificada.
     frequencias = np.linspace(0, fs / 2, quantidade_pontos)
     resposta = []
 
+    # Testa a resposta do filtro para cada frequência usando a função de transferência.
     for f in frequencias:
-        # Converte Hz para frequência angular digital, em radianos/amostra.
+        #convertendo a frequência em radianos por amostra.
         w = 2 * np.pi * f / fs
         numerador = 0j
         denominador = 0j
@@ -63,6 +55,8 @@ def calcular_resposta_frequencia(b, a, fs, quantidade_pontos=2000):
         resposta.append(numerador / denominador)
 
     resposta = np.asarray(resposta)
+
+    # Converte a resposta complexa em ganho em dB.
     ganho_db = 20 * np.log10(np.abs(resposta) + 1e-12)
     return frequencias, ganho_db
 
@@ -75,12 +69,15 @@ def ganho_em_frequencia(f_alvo, frequencias, ganho_db):
 
 def calcular_spr(x, x_adv):
     """Calcula Signal-to-Perturbation Ratio (SPR), em dB."""
+    #Soma da energia de todas as amostras
     energia_sinal = np.sum(np.abs(x) ** 2)
+    # mede a energia da perturbação (diferença entre sinal original e avançado)
     energia_perturbacao = np.sum(np.abs(x - x_adv) ** 2)
-
+    # Se a energia da perturbação for zero, o SPR é infinito.
     if energia_perturbacao == 0:
         return np.inf
 
+    #Fórmula do SPR em dB.
     return 10 * np.log10(energia_sinal / energia_perturbacao)
 
 
@@ -90,10 +87,13 @@ def calcular_ober(delta, fs, fc):
     OBER significa Out-of-Band Energy Ratio. Nesta reprodução ele é mostrado
     em porcentagem, para facilitar a interpretação visual.
     """
+
+    #Converte o sinal delta para o domínio da frequência usando FFT.
     espectro = np.fft.fft(delta)
     frequencias = np.fft.fftfreq(len(delta), d=1 / fs)
     potencia = np.abs(espectro) ** 2
 
+    #Cria uma máscara para as frequências fora da banda de interesse.
     mascara_fora = np.abs(frequencias) > fc
     energia_total = np.sum(potencia)
     energia_fora = np.sum(potencia[mascara_fora])
@@ -101,6 +101,7 @@ def calcular_ober(delta, fs, fc):
     if energia_total == 0:
         return 0.0
 
+    #Calcula a porcentagem de energia fora da banda de interesse.
     return 100 * energia_fora / energia_total
 
 
@@ -137,6 +138,7 @@ def carregar_amostra_radioml(caminho, modulacao="QPSK", snr=18, indice=0):
             chave_encontrada = chave
             break
 
+    #Valida se a chave foi encontrada no dataset.
     if chave_encontrada is None:
         chaves_disponiveis = list(dados.keys())[:10]
         raise KeyError(
@@ -145,6 +147,7 @@ def carregar_amostra_radioml(caminho, modulacao="QPSK", snr=18, indice=0):
         )
 
     amostras = np.asarray(dados[chave_encontrada])
+    #Valida o formato das amostras carregadas.
     if amostras.ndim != 3 or amostras.shape[1:] != (2, 128):
         raise ValueError(
             "Formato inesperado no dataset. Era esperado "

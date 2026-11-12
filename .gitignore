@@ -20,6 +20,3 @@ htmlcov/
 
 # Dataset fornecido localmente (arquivo grande)
 data/*.pkl
-
-# Figuras e saídas geradas ao executar os experimentos
-results/*.png
